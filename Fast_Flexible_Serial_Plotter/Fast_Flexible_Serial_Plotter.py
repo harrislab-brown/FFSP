@@ -7,12 +7,15 @@ from datetime import datetime
 from time import sleep
 from scipy import signal
 
-class Animate():
+from Plotter import Plotter
+
+class Fast_Flexible_Serial_Plotter():
 
     def __init__(self) -> None:
         
         # check serial port of ESP32 device on your computer:
-        self.serial_port = 'COM6'   ### CHANGE THIS TO MATCH YOUR COMPUTER ###
+        self.serial_port = 'COM8'   ### CHANGE THIS TO MATCH YOUR COMPUTER ###
+
         # data storage variables:
         self.data_queue = Queue()
         self.data_arr = []
@@ -29,34 +32,14 @@ class Animate():
                                 # If True, self.data_arr will be saved to a file when the space bar is pressed
         self.save_raw_buffer = False
 
-        # setup pygame window:
+        # setup plotter:
         pygame.init()
-        self.fps = 30
-        self.width, self.height = 800,400
-        self.padding = 20
-        self.screen = pygame.display.set_mode((self.width, self.height))
-        self.clock = pygame.time.Clock()
+        self.plotter = Plotter(pygame.display)
         self.running = True
-        self.font = pygame.font.Font('freesansbold.ttf', 16)
-        self.red = '0xab250e'
-        self.red_trig = '0xd46450'
-        self.grn = '0x1aab40'
-        self.grn_trig = '0x8ce6a4'
-        self.blu = '0x6f46db'
-        self.grid_color = '0x727575'
 
-        self.plot_grid = True
-        self.plot_real_time = True
-        self.plot_filt_data = True
-        self.plot_trig_points = True
-
-        # plotting parameters:
-        self.plot_len = 2500
-        self.plot_queue = []
-        self.plot_y_scale = self.height / 10
 
         # setup data processing low pass filter:
-        sample_rate = 500 # 0.5kHz sample frequency
+        sample_rate = 2000 # 2Hz sample frequency
         cutoff_freq = 50 # -3db frequency of filter in Hz
         self.filt_coeff_b, self.filt_coeff_a = signal.butter(3,cutoff_freq,'lowpass',fs=sample_rate)
 
@@ -74,60 +57,7 @@ class Animate():
         # begin animation loop:
         self.run_loop()
 
-    def draw_background(self):
-        #fill screen to cover last frame
-        self.screen.fill('0x313837')
-
-        if(self.plot_grid == False):
-            return
-        num_vert_lines =  10
-        num_hori_lines = 5
     
-        for i in range(num_vert_lines+1): 
-            y_val = i * self.height/num_vert_lines
-            pygame.draw.line(self.screen,self.grid_color,(0,y_val),(self.width,y_val ))
-        for i in range(num_hori_lines+1):
-            x_val = i * (self.width-2*self.padding)/num_hori_lines
-            pygame.draw.line(self.screen,self.grid_color,(x_val+self.padding,0),(x_val+self.padding,self.height))
-        pygame.draw.line(self.screen,self.grid_color, (0,self.height/2),(self.width, self.height/2), 2 )
-        
-    def plot_traces(self):
-        overage = len(self.plot_queue) - self.plot_len
-        if overage > 0:
-            del self.plot_queue[0:overage]
-        
-        if( self.plot_real_time == False):
-            return
-        #create regularly spaced x axis:
-        time_range = np.linspace(self.padding, self.width-self.padding, num=self.plot_len)
-        
-        x_plt_trace = [[time_range[i], -self.plot_y_scale*self.plot_queue[i][0]+self.height/2] for i in range(len(self.plot_queue))]
-        y_plt_trace = [[time_range[i], -self.plot_y_scale*self.plot_queue[i][1]+self.height/2] for i in range(len(self.plot_queue))]
-        z_plt_trace = [[time_range[i], -self.plot_y_scale*self.plot_queue[i][2]+self.height/2] for i in range(len(self.plot_queue))]
-        pygame.draw.aalines(self.screen,self.red,False,x_plt_trace)
-        pygame.draw.aalines(self.screen,self.grn,False,y_plt_trace)
-        pygame.draw.aalines(self.screen,self.blu,False,z_plt_trace)        
-    
-    def plot_filtered_output(self):
-        if(self.plot_filt_data == False):
-            return
-        if len(self.filt_data_arr) < self.plot_len: # if the filtered data array is not full, don't plot
-            return
-        self.filt_data_arr = self.filt_data_arr[:self.plot_len]
-        time_range = np.linspace(self.padding, self.width-self.padding, num=self.plot_len)
-        x_plt_trace = [[time_range[i],-self.plot_y_scale*self.filt_data_arr[i][0]+self.height/2] for i in range(self.plot_len)]
-        y_plt_trace = [[time_range[i],-self.plot_y_scale*self.filt_data_arr[i][1]+self.height/2] for i in range(self.plot_len)]
-        z_plt_trace = [[time_range[i],-self.plot_y_scale*self.filt_data_arr[i][2]+self.height/2] for i in range(self.plot_len)]
-        pygame.draw.aalines(self.screen,self.red,False,x_plt_trace)
-        pygame.draw.aalines(self.screen,self.grn,False,y_plt_trace)
-        pygame.draw.aalines(self.screen,self.blu,False,z_plt_trace)
-
-        if(self.plot_trig_points == False):
-            return
-        #plot circles at every point the code has detected a rising edge
-        # pkpk values calculated between trigger points.
-        [pygame.draw.circle(self.screen,self.red_trig,x_plt_trace[i],2) for i in self.x_trig_i]
-        [pygame.draw.circle(self.screen,self.grn_trig,y_plt_trace[i],2) for i in self.y_trig_i]
 
     def end_animation(self):
         self.port_thread.join()
@@ -147,7 +77,7 @@ class Animate():
         t_trace = [item[3] for item in self.data_arr]
 
         # array used for plotting filtered data:
-        self.filt_data_arr = [[x_trace[i],y_trace[i],z_trace[i]] for i in range(self.plot_len)]
+        self.filt_data_arr = [[x_trace[i],y_trace[i],z_trace[i]] for i in range(self.plotter.plot_len)]
         
         # find max and min of each trace. Trigger threshold set at average of max and min
         x_max = np.max(x_trace)
@@ -243,7 +173,7 @@ class Animate():
                         self.save_raw_buffer = True
 
             # draw background to wipe away anything from last frame, draw plot grid
-            self.draw_background()
+            self.plotter.draw_background()
             
             # get data from background thread:
             while(self.data_queue.empty() == False):
@@ -252,11 +182,11 @@ class Animate():
                     # turn string into array of integers:
                     data = list(map(int, raw_data.strip("\r\n").split(" "))) 
                     # convert data from microvolts to G (accel) based on accelerometer datasheet specs:
-                    g_data = list(map(lambda x: round(((x/1000000) - 1.615)/.3 , 3),data))
+                    g_data = list(map(lambda x: round(((x/500000) - 1.615)/.3 , 3),data))
                     g_data[3] = round(data[3],3) # reset dT element to microseconds between samples (should not be scaled)
                 
                     self.data_arr.append(g_data)
-                    self.plot_queue.append(g_data)
+                    self.plotter.plot_queue_push(g_data)
 
                     # data array buffer is processed and stored when full
                     if(len(self.data_arr) == self.data_sample_len):
@@ -268,23 +198,13 @@ class Animate():
                     print('serial read error')
             
             # plot on the screen: 
-            self.plot_traces()
-            self.plot_filtered_output()
-            
-            #display animation fps:
-            #fps = self.font.render( str(int(self.clock.get_fps())) ,True,'white')
-            #self.screen.blit(fps,(self.padding + self.width/10, self.padding))
-            #display accel_averages:
-            ax = self.font.render('X": ' + str(self.x_avg), True, self.red)
-            ay = self.font.render('Y": ' + str(self.y_avg), True, self.grn)
-            az = self.font.render('Z": ' + str(self.z_avg), True, self.blu)
-            self.screen.blit(ax, (3*self.width/10, self.padding))
-            self.screen.blit(ay, (5*self.width/10, self.padding))
-            self.screen.blit(az, (7*self.width/10, self.padding))
+            self.plotter.plot_channels()
+            self.plotter.plot_filtered_output(self.filt_data_arr, self.x_trig_i, self.y_trig_i)
+            self.plotter.plot_text(self.x_avg, self.y_avg, self.z_avg)
             
             # flip() the display to put your work on screen
             pygame.display.flip()
-            self.clock.tick(self.fps)  # limits FPS 
+            self.plotter.tick()# limits FPS
 
         #runs when window x is pressed:
         pygame.quit()
@@ -293,4 +213,4 @@ class Animate():
 
 # program entry point:
 if __name__=='__main__':
-    my_animation = Animate()
+    my_animation = Fast_Flexible_Serial_Plotter()
