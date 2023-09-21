@@ -37,7 +37,7 @@ class Animate:
         self.plot_grid = True
 
         # open output data file:
-        self.save_file = False
+        self.save_file = True
         if self.save_file:
             self.file = open(".\data" + datetime.now().strftime("\%y-%m-%d_%H-%M-%S")+'log.csv', 'a+')
 
