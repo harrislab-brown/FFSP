@@ -1,2 +1,4 @@
-Fast_Flexible_Serial_Plotter/.idea
+*.xml
+*.iml
+*.pyc
 .DS_Store
