@@ -52,14 +52,14 @@ class SerialMonitor:
         if self.thread is None:
             self.thread = Thread(target=self.background_thread)
             self.thread.start()
-            while ~self.is_receiving:
+            while not self.is_receiving:
                 time.sleep(0.1)  # wait until background thread starts receiving data
 
     def background_thread(self):
         time.sleep(1)
         self.serial_connection.reset_input_buffer()
         raw_data = bytearray(self.num_data_bytes * self.num_channels)
-        value_array = list()
+        value_array = [None] * self.num_channels
 
         while self.running:
             self.serial_connection.readinto(raw_data)
@@ -70,7 +70,7 @@ class SerialMonitor:
             for i in range(self.num_channels):
                 byte_data = private_data[(i * self.num_data_bytes):((i+1) * self.num_data_bytes)]
                 value_array[i], = struct.unpack(self.data_type, byte_data)
-            self.data.put(value_array)
+            self.data.put(value_array[:])
     
     def serial_write(self, val):  # TODO: figure out write format
         val = int(round(val))
