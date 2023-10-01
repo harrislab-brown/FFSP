@@ -48,12 +48,14 @@ class SerialMonitor:
             exit()
         return serial_connection
 
+
     def serial_input_background_init(self):
         if self.thread is None:
             self.thread = Thread(target=self.background_thread)
             self.thread.start()
             while not self.is_receiving:
                 time.sleep(0.1)  # wait until background thread starts receiving data
+
 
     def background_thread(self):
         time.sleep(1)
@@ -75,7 +77,7 @@ class SerialMonitor:
     def serial_write(self, val):  # TODO: figure out write format
         val = int(round(val))
         val_str = bytes(str(val), 'utf-8')
-        print(val_str)
+        #print(val_str)
         self.serial_connection.write(val_str)
 
     def close(self):
