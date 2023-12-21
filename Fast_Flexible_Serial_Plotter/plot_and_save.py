@@ -37,18 +37,21 @@ class Animate:
         self.grn = '0x1aab40'
         self.grn_trig = '0x8ce6a4'
         self.blu = '0x6f46db'
+        self.channel_color = [self.red, self.grn, self.blu]
         self.grid_color = '0x727575'
         self.text_color = '0xEEEEEE'
 
         # plotting parameters:
-        self.sample_rate = 10_000 #sample rate in Hz. 10kHz is default for microcontroller on boot
+        self.sample_rate = 1000 #sample rate in Hz. 10kHz is default for microcontroller on boot
         self.cutoff_freq = self.sample_rate /2 -.01
-        self.time_base = .01 # seconds to display on the screen at a time (horizontal scale)
-        self.y_scale = self.height / 1023
-        self.y_offset = 0
+        self.time_base = .1 # seconds to display on the screen at a time (horizontal scale)
+        #self.y_scale = self.height / 1023
+        self.y_scale = self.height / 10_000
+        #self.y_offset = 0
+        self.y_offset = self.height/2
         self.plot_grid = True
         self.plot_text = True
-        self.use_triggering = True
+        self.use_triggering = False
         self.plot_filtered = False
         self.pause_plot = False
         self.set_plot_timing(self.sample_rate)
@@ -249,7 +252,7 @@ class Animate:
                 trace = [[self.time_range[i - start_index], -self.y_scale * final_plot_data[i][j] - self.y_offset + self.height] for i
                             in range(start_index, int(min(len(final_plot_data), self.plot_len_visible + start_index)))]
                 if len(trace) > 1:
-                    pygame.draw.aalines(self.screen, self.red, False, trace)
+                    pygame.draw.aalines(self.screen, self.channel_color[j], False, trace)
 
                 if self.debug_mode:
                     print("start index: " + str(start_index))
