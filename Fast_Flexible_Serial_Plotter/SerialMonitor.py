@@ -8,7 +8,7 @@ import time
 
 
 class SerialMonitor:
-    def __init__(self, serial_port=None, serial_baud=115200, num_data_bytes=2, num_channels=1):
+    def __init__(self, serial_port=None, serial_baud=115200, num_data_bytes=2, num_channels=3):
         self.num_data_bytes = num_data_bytes  # how many bytes per data point
         self.num_channels = num_channels  # how many data points we receive at a time
         self.data = Queue()  # each element is a Python list of n channels at a given time step
@@ -71,6 +71,7 @@ class SerialMonitor:
                 byte_data = private_data[(i * self.num_data_bytes):((i+1) * self.num_data_bytes)]
                 value_array[i], = struct.unpack(self.data_type, byte_data)
             self.data.put(value_array[:])
+            print(value_array)
     
     def serial_write(self, val):  # TODO: figure out write format
         val = int(round(val))

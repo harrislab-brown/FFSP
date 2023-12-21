@@ -29,12 +29,32 @@ class Animate:
         self.grn_trig = '0x8ce6a4'
         self.blu = '0x6f46db'
         self.grid_color = '0x727575'
+<<<<<<< Updated upstream
 
         # plotting parameters:
         self.plot_len = self.data_chunk_size
         self.y_scale = self.height / 1023
         self.y_offset = 0
         self.plot_grid = True
+=======
+        self.text_color = '0xEEEEEE'
+        self.channel_color = [self.red, self.grn, self.blu]
+
+        # plotting parameters:
+        self.sample_rate = 1_000 #sample rate in Hz. 10kHz is default for microcontroller on boot
+        self.cutoff_freq = self.sample_rate /2 -.01
+        self.time_base = .1 # seconds to display on the screen at a time (horizontal scale)
+        #self.y_scale = self.height / 1023
+        self.y_scale = self.height / 10000
+        #self.y_offset = 0
+        self.y_offset=self.height/2
+        self.plot_grid = True
+        self.plot_text = True
+        self.use_triggering = False
+        self.plot_filtered = False
+        self.pause_plot = False
+        self.set_plot_timing(self.sample_rate)
+>>>>>>> Stashed changes
 
         # open output data file:
         self.save_file = True
@@ -66,6 +86,46 @@ class Animate:
         if self.save_file:
             self.file.close()
 
+<<<<<<< Updated upstream
+=======
+    def set_plot_timing(self, new_sample_rate = 0):
+        # sample rate argument: Specify a sample rate in Hz. If zero or no value is provided, sample rate will
+        # remain the same. Otherwise, sample rate will be updated to the supplied argument. 
+
+    
+        # set sample rate and send new value to microcontroller:
+        if new_sample_rate:
+            sample_period_us = 1_000_000/(new_sample_rate) #microseconds per sample
+            self.serial_monitor.serial_write(sample_period_us)
+            self.sample_rate = new_sample_rate
+            self.cutoff_freq = self.sample_rate/2 -.01
+
+
+        self.plot_len = int(self.sample_rate * self.time_base * 5) # multiply by 5, which is the number of divisions in time
+        self.plot_len_visible = self.plot_len
+
+        # when using a rising edge trigger, we save twice as much data and only plot the data
+        # in the region data[trig_index: trig_index + plot_len_visible]
+        if self.use_triggering:
+            self.plot_len = self.plot_len * 2 
+
+        # create regularly spaced x axis array:
+        self.time_range = np.linspace(self.padding, self.width - self.padding, num=self.plot_len_visible)
+
+        # create digital lowpass filter with cutoff frequency set to nyquist frequency (sample rate/2)
+        self.filter = Filter(self.cutoff_freq, self.sample_rate, self.plot_len)
+
+
+
+    def find_trig_index(self, data, channel, thresh):
+        trig_index = 0
+        for i in range(1, len(data)):
+            if((data[i-1][channel] < thresh) and (data[i][channel] >= thresh)):
+                trig_index = i
+        
+        return trig_index # returns index of rising edge, or zero if no rising edge is found
+
+>>>>>>> Stashed changes
     def run_loop(self):
         # arrays to store serial data for storage or plotting
         data_chunk = []
@@ -106,12 +166,39 @@ class Animate:
             if overage > 0:
                 del data_rolling_plot[0:overage]
 
+<<<<<<< Updated upstream
             if len(data_rolling_plot) > 1:
                 for j in range(self.serial_monitor.num_channels):
                     # plot the data
                     trace = [[time_range[i], -self.y_scale * data_rolling_plot[i][j] - self.y_offset + self.height] for i
                              in range(len(data_rolling_plot))]
                     pygame.draw.aalines(self.screen, self.red, False, trace)
+=======
+            if self.plot_filtered:
+                final_plot_data = data_rolling_plot_filtered
+            else:
+                final_plot_data = data_rolling_plot
+
+            start_index = 0
+            if self.use_triggering:
+                start_index = self.find_trig_index(data_rolling_plot_filtered[0:self.plot_len_visible],0,618)
+
+            for j in range(self.serial_monitor.num_channels):
+                # plot the data
+
+                trace = [[self.time_range[i - start_index], -self.y_scale * final_plot_data[i][j] - self.y_offset + self.height] for i
+                            in range(start_index, int(min(len(final_plot_data), self.plot_len_visible + start_index)))]
+                if len(trace) > 1:
+                    pygame.draw.aalines(self.screen, self.channel_color[j], False, trace)
+
+                if self.debug_mode:
+                    print("start index: " + str(start_index))
+                    print("len array: " + str(len(data_rolling_plot)))
+                    print("plot len: " + str(self.plot_len))
+                    print("plot len visible: " + str(self.plot_len_visible))
+                    print("plot len: " + str(self.plot_len))
+
+>>>>>>> Stashed changes
             
             # flip() the display to put your work on screen
             pygame.display.flip()
