@@ -73,6 +73,7 @@ class SerialMonitor:
                 byte_data = private_data[(i * self.num_data_bytes):((i+1) * self.num_data_bytes)]
                 value_array[i], = struct.unpack(self.data_type, byte_data)
             self.data.put(value_array[:])
+            #print(value_array[:])
     
     def serial_write(self, val):  # TODO: figure out write format
         val = int(round(val))

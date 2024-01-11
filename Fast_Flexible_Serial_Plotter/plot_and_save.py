@@ -3,6 +3,7 @@ import pygame
 from datetime import datetime
 from SerialMonitor import SerialMonitor
 from Filter import Filter
+from time import sleep
 
 ###
 # Keyboard commands can be used to change plot parameters while program is running:
@@ -42,11 +43,11 @@ class Animate:
         self.text_color = '0xEEEEEE'
 
         # plotting parameters:
-        self.sample_rate = 1000 #sample rate in Hz. 10kHz is default for microcontroller on boot
+        self.sample_rate = 10_000 #sample rate in Hz. 10kHz is default for microcontroller on boot
         self.cutoff_freq = self.sample_rate /2 -.01
-        self.time_base = .1 # seconds to display on the screen at a time (horizontal scale)
+        self.time_base = .01 # seconds to display on the screen at a time (horizontal scale)
         #self.y_scale = self.height / 1023
-        self.y_scale = self.height / 10_000
+        self.y_scale = self.height / 5
         #self.y_offset = 0
         self.y_offset = self.height/2
         self.plot_grid = True
@@ -55,6 +56,25 @@ class Animate:
         self.plot_filtered = False
         self.pause_plot = False
         self.set_plot_timing(self.sample_rate)
+
+        # axis calibration parameters:
+        x1 = 1440
+        xn1 = -785
+        y1 = 1430
+        yn1 = -790
+        z1 = 1550
+        zn1 = -640
+
+        x_zero = (x1 + xn1)/2
+        x_sensitivity = x1 - x_zero
+    
+        y_zero = (y1 + yn1)/2
+        y_sensitivity = y1 - y_zero
+
+        z_zero = (z1 + zn1)/2
+        z_sensitivity = z1 - z_zero
+        self.axis_zero = [x_zero, y_zero, z_zero]
+        self.axis_sensitivity = [x_sensitivity, y_sensitivity, z_sensitivity]
 
         # open output data file:
         self.save_file = False
@@ -94,7 +114,6 @@ class Animate:
             if self.plot_filtered:
                 self.screen.blit(filter_cutoff_text, filter_cutoff_text.get_rect( x = 30 + 3*(self.width-2*self.padding)/num_hori_lines , centery = self.height-self.padding))
 
-
     def end_animation(self):
         self.serial_monitor.close()
         if self.save_file:
@@ -104,7 +123,6 @@ class Animate:
         # sample rate argument: Specify a sample rate in Hz. If zero or no value is provided, sample rate will
         # remain the same. Otherwise, sample rate will be updated to the supplied argument. 
 
-    
         # set sample rate and send new value to microcontroller:
         if new_sample_rate:
             sample_period_us = 1_000_000/(new_sample_rate) #microseconds per sample
@@ -127,8 +145,6 @@ class Animate:
         # create digital lowpass filter with cutoff frequency set to nyquist frequency (sample rate/2)
         self.filter = Filter(self.cutoff_freq, self.sample_rate, self.plot_len)
 
-
-
     def find_trig_index(self, data, channel, thresh):
 
         trig_index = 0
@@ -138,6 +154,36 @@ class Animate:
         
         return trig_index # returns index of rising edge, or zero if no rising edge is found
 
+    def calibrate_axis(self, axis_index):
+        num_samples = 1000
+        calibration_array = np.zeros((num_samples,2))
+        axis = ['X', 'Y', 'Z']
+        # tell user to put 'axis' up. count down in terminal 3, 2, 1, recording..... 
+        print("Set up for positive "+ axis[axis_index])
+        sleep(1)
+        print("starting positive "+axis[axis_index]+" calibration")
+        while((len(calibration_array) < num_samples) and (not self.serial_monitor.data.empty())) :
+            data_point = self.serial_monitor.data.get()
+            calibration_array.append(data_point[axis])
+    
+        print("Set up for negative "+ axis[axis_index] )
+        sleep(2)
+        print("starting negative "+axis[axis_index]+" calibration")
+
+        
+        # tell user 'averaging samples....'
+        # set up for negative 'axis'
+        # count down 3, 2, 1, recoring....
+        # print avg +1,-1,zero crossing 
+        # Set the axis values in self.axis_zero and self.axis_sensitivity arrays
+        # decide if this should be used to scale data at time of plotting or change y_offset and y_scale?
+        
+    def shift_data(self, data_point):
+        shifted_data_point = [0,0,0]
+        for i in range(len(data_point)):
+            shifted_data_point[i] = (data_point[i] - self.axis_zero[i])  / self.axis_sensitivity[i]
+        return shifted_data_point
+        
     def run_loop(self):
         # arrays to store serial data for storage or plotting
         data_chunk = []
@@ -157,10 +203,12 @@ class Animate:
                         try:
                             new_sample_rate = int(input("Enter new sample rate in Hz: "))
                             if (new_sample_rate > 0 and new_sample_rate <= 10_000):
-                                self.set_plot_timing(new_sample_rate)
-                                print("Sample rate set to " + str(self.sample_rate) + " Hz")
+                                #self.set_plot_timing(new_sample_rate)
+                                #print("Sample rate set to " + str(self.sample_rate) + " Hz")
+                                pass
                             else:
-                                print("Sample rate must be between 1Hz and 5kHz")
+                                #print("Sample rate must be between 1Hz and 5kHz")
+                                pass
                         except:
                             print("Invalid input. Sample rate should be a positive integer")
                     if event.key == pygame.K_b:
@@ -199,7 +247,15 @@ class Animate:
                     if event.key == pygame.K_f:
                         self.plot_filtered = not self.plot_filtered
                         print("Plot filtered data: " + str(self.plot_filtered))
-
+                    if event.key == pygame.K_x:
+                        print("begin X calibration")
+                        self.calibrate_axis(0)
+                    if event.key == pygame.K_x:
+                        print("begin Y calibration")
+                        self.calibrate_axis(1)
+                    if event.key == pygame.K_z: 
+                        print("Begin Z calibration")
+                        self.calibrate_axis(2)
 
             # draw background to wipe away anything from last frame, draw plot grid
             self.draw_background()
@@ -209,8 +265,8 @@ class Animate:
             while not self.serial_monitor.data.empty():
                 data_point = self.serial_monitor.data.get()
                 data_chunk.append(data_point[:])
-                data_rolling_plot.append(data_point[:])
-
+                shifted_data = self.shift_data(data_point[:])
+                data_rolling_plot.append(shifted_data)
                 if len(data_chunk) == self.data_chunk_size:
                     # we have a complete chunk of data so save to file
                     if self.save_file:
@@ -270,6 +326,7 @@ class Animate:
         # runs when window x is pressed:
         pygame.quit()
         self.end_animation()
+
 
 
 # program entry point:
