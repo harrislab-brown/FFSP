@@ -58,8 +58,8 @@ class Animate:
         self.set_plot_timing(self.sample_rate)
 
         # axis calibration parameters:
-        x1 = 1440
-        xn1 = -785
+        x1 = 1440 # 1 g measurement 
+        xn1 = -785 # -1 g measurement 
         y1 = 1430
         yn1 = -790
         z1 = 1550
@@ -76,10 +76,8 @@ class Animate:
         self.axis_zero = [x_zero, y_zero, z_zero]
         self.axis_sensitivity = [x_sensitivity, y_sensitivity, z_sensitivity]
 
-        # open output data file:
         self.save_file = False
-        if self.save_file:
-            self.file = open(".\data" + datetime.now().strftime("\%y-%m-%d_%H-%M-%S")+'log.csv', 'a+')
+        self.save_g_data = True # save raw data from accelerometer -> False, convert to G before saving -> True
 
         # begin animation loop:
         self.run_loop()
@@ -154,6 +152,19 @@ class Animate:
         
         return trig_index # returns index of rising edge, or zero if no rising edge is found
 
+    def toggle_save_data(self):
+        # open output data file:
+        if self.save_file == True:
+            self.save_file = False
+            print("Stop Saving Data")
+            self.file.close()
+        else:
+            print("File Opened, Saving Data")
+            self.save_file = True
+            self.file = open(".\data" + datetime.now().strftime("\%y-%m-%d_%H-%M-%S")+'log.csv', 'a+')
+
+
+
     def calibrate_axis(self, axis_index):
         num_samples = 1000
         calibration_array = np.zeros((num_samples,2))
@@ -201,14 +212,7 @@ class Animate:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_s:
                         try:
-                            new_sample_rate = int(input("Enter new sample rate in Hz: "))
-                            if (new_sample_rate > 0 and new_sample_rate <= 10_000):
-                                #self.set_plot_timing(new_sample_rate)
-                                #print("Sample rate set to " + str(self.sample_rate) + " Hz")
-                                pass
-                            else:
-                                #print("Sample rate must be between 1Hz and 5kHz")
-                                pass
+                            self.toggle_save_data()
                         except:
                             print("Invalid input. Sample rate should be a positive integer")
                     if event.key == pygame.K_b:
@@ -272,7 +276,13 @@ class Animate:
                     if self.save_file:
                         for row in data_chunk:
                             for i in range(self.serial_monitor.num_channels):
-                                self.file.write(str(row[i]) + ',')
+                                raw_val = row[i]
+                                g_converted_val = (raw_val - self.axis_zero[i])/ self.axis_sensitivity[i]
+                                if self.save_g_data:
+                                    self.file.write(str(g_converted_val) + ',')
+                                else:
+                                    self.file.write(str(raw_val) + ',')
+                                    
                             self.file.write('\n')
 
                     # reset the data chunk
